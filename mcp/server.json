@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.jobzero/jobzero",
+  "title": "JobZero",
+  "description": "Score job fit, tailor grounded resumes, and prefill applications from your JobZero account.",
+  "version": "1.0.0",
+  "websiteUrl": "https://www.jobzero.app",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.jobzero.app/api/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer API token. Create one under Agents at https://www.jobzero.app/agents",
+          "isRequired": true,
+          "isSecret": true,
+          "value": "Bearer {token}",
+          "variables": {
+            "token": {
+              "description": "JobZero API token from https://www.jobzero.app/agents",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
