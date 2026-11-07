@@ -118,7 +118,7 @@ The following tools are being added to the hosted service. Use them only when th
 | `jobzero_list_applications` | Read application status and approved resume links |
 | `jobzero_record_manual_submission` | Record a submission the candidate confirms they already made |
 
-After rollout, `jobzero_get_profile_and_quota` also reports setup readiness. Scoring and tailoring accept an optional `requestId` to start a resumable run. Task results remain accessible for one hour after completion within the same server process. A restart clears these records, and multiple server processes do not share them. Use the same request ID and inputs to retry within that window.
+After rollout, `jobzero_get_profile_and_quota` also reports setup readiness. Scoring and tailoring accept an optional `requestId` to start a resumable run. Compact task records are kept in PostgreSQL for one hour after completion. They hold status, retry fingerprints, and references to saved jobs or a resume draft; full result payloads are read from the existing records when requested. Completed records survive server restarts and are shared by workers using the same database. Use the same request ID and inputs to retry within that window. If a running worker stops reporting progress for five minutes, its task reports `TASK_INTERRUPTED`. Inspect saved work before deliberately starting a new request; interrupted work is not automatically rerun.
 
 ## Review and plan limits
 
@@ -141,7 +141,7 @@ Use an absolute path when configuring a client that starts the bridge from anoth
 - If a token is rejected, regenerate it on Agents and update the client's credentials.
 - If the client cannot connect directly over HTTP, check its supported transports and use the stdio bridge if appropriate.
 - If a tool is missing, reconnect or start a new session to refresh discovery. Follow the currently advertised tools and use the web app for features awaiting rollout.
-- If a task cannot be found after a restart or after its retry window, check your jobs or resume draft before starting another operation.
+- If a task reports an interruption or its retry window has expired, check your jobs or resume draft before starting another operation. A recovered result reflects the current saved values of the referenced records.
 
 ## Repository contents
 

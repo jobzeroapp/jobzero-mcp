@@ -89,7 +89,7 @@ When `jobzero_get_task` is advertised and the scoring or tailoring schema includ
 
 Reuse the same request ID and inputs if the connection drops before you receive the run ID. Reusing it returns the existing run, including completed or failed results. If the inputs change, use a new request ID for the newly authorized operation. After a failed run, address its error before deliberately starting a new run.
 
-Task results are available for one hour after completion in the same server process. A restart clears them; separate processes do not share them. If a run cannot be recovered, inspect the existing job, score, or tailored draft before starting another call that could consume quota.
+Compact task records are stored in PostgreSQL for one hour after completion and survive server restarts. Workers sharing the database can recover the same run. Polling reads the current saved values of the referenced jobs or resume draft. If a worker stops reporting progress for five minutes, its task reports `TASK_INTERRUPTED`; the service does not automatically rerun it. Inspect saved jobs, scores, or drafts before deliberately starting another request. If the retry window has expired, inspect saved work before calling a tool that could consume quota.
 
 ## Application tracking after rollout
 
