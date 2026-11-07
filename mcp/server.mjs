@@ -4,8 +4,8 @@
  * mcp/server.mjs
  *
  * Standalone stdio CLI bridge for JobZero MCP Server.
- * Enables coding agents (Claude Code, Cursor, Antigravity, Muse, Instinct)
- * to interact with JobZero via stdio JSON-RPC 2.0.
+ * Enables clients with local MCP support to interact with JobZero
+ * via stdio JSON-RPC 2.0.
  *
  * Reads JSON-RPC requests from process.stdin, forwards them over HTTP to the
  * JobZero API endpoint with candidate Bearer API token authentication,
@@ -34,7 +34,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`JobZero MCP Server (stdio bridge)
 
 Usage:
-  node mcp/server.mjs [--token <session_token>] [--url <api_url>]
+  node mcp/server.mjs [--token <api_token>] [--url <api_url>]
 
 Options:
   -t, --token    JobZero API token from the Agents tab (or set JOBZERO_TOKEN env var)

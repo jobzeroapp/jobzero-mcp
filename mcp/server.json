@@ -26,5 +26,9 @@
         }
       ]
     }
-  ]
+  ],
+  "repository": {
+    "url": "https://github.com/jobzeroapp/jobzero-mcp",
+    "source": "github"
+  }
 }
