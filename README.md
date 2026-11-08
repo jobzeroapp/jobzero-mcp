@@ -14,7 +14,7 @@ This repo holds the public setup for JobZero's hosted MCP (Model Context Protoco
 
 ## 1. Create an API token
 
-Sign in to JobZero and open [Agents](https://www.jobzero.app/agents) to generate a token. It is shown once, works only with the JobZero MCP server, and can be regenerated or revoked there at any time.
+New to JobZero? Start at [jobzero.app/mcp](https://www.jobzero.app/mcp) to sign up or sign in, then generate a token on [Agents](https://www.jobzero.app/agents). If you are already signed in, go straight to Agents. The token is shown once, works only with the JobZero MCP server, and can be regenerated or revoked there at any time.
 
 Keep the token in your assistant's credential settings or an environment variable. Never paste it into a chat message or commit it to a file.
 
