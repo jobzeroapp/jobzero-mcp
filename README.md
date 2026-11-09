@@ -109,6 +109,7 @@ Scans, scoring, and tailoring can run in the background: your assistant starts a
 ## You stay in control
 
 - Your assistant shows you every resume change and verification flag, and waits for your OK before approving.
+- Every tool tells your assistant whether it only reads, can overwrite your data, or reaches outside JobZero, so the assistant can run lookups freely and ask before the rest.
 - On Free and Pro, approving returns a link for you to apply yourself. On Max, approving can queue JobZero AI Apply, and your assistant should tell you that before you approve.
 - Recording a submission only updates your tracker. It never sends anything to an employer, and the skill tells assistants never to submit an application for you.
 - Scans, scores, and tailored resumes made from your assistant count toward your JobZero plan, just like in the app. Your assistant's own usage is billed by its provider, not JobZero. See [pricing](https://www.jobzero.app/pricing).
