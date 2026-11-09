@@ -5,6 +5,13 @@
   "description": "Score job fit, tailor grounded resumes, and prefill applications from your JobZero account.",
   "version": "1.0.2",
   "websiteUrl": "https://www.jobzero.app",
+  "icons": [
+    {
+      "src": "https://www.jobzero.app/apple-touch-icon.png",
+      "mimeType": "image/png",
+      "sizes": ["180x180"]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",
