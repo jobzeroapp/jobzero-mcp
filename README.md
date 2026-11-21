@@ -124,7 +124,9 @@ Set `JOBZERO_TOKEN` in the environment of the client that launches the bridge, s
 node /absolute/path/to/jobzero-mcp/mcp/server.mjs
 ```
 
-Run `node mcp/server.mjs --help` for options.
+Use `--url` or `JOBZERO_API_URL` to override the gateway. Use HTTPS for remote gateways. Loopback development addresses also accept HTTP. Gateway URLs must be free of embedded credentials, query strings, and fragments. The bridge rejects redirects and gives each gateway call up to five minutes.
+
+The bridge accepts up to eight concurrent calls and limits each input line to 2 MiB. If it returns JSON-RPC error `-32003` for a request, wait for pending calls to finish or reduce the request size before retrying. Run `node mcp/server.mjs --help` for options.
 
 ## Troubleshooting
 
