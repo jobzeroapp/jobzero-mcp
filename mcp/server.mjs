@@ -12,8 +12,13 @@
  * and streams responses back to process.stdout.
  */
 
-import readline from 'readline';
+import { once } from 'node:events';
 import { fileURLToPath } from 'url';
+
+const MAX_IN_FLIGHT = 8;
+const MAX_LINE_BYTES = 2 * 1024 * 1024;
+const GATEWAY_TIMEOUT_MS = 300_000;
+const CAPACITY_ERROR = -32003;
 
 function getCliArg(flags) {
   for (let i = 2; i < process.argv.length; i++) {
@@ -34,10 +39,10 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`JobZero MCP Server (stdio bridge)
 
 Usage:
-  node mcp/server.mjs [--token <api_token>] [--url <api_url>]
+  node mcp/server.mjs [--url <api_url>]  (set JOBZERO_TOKEN in the environment)
 
 Options:
-  -t, --token    JobZero API token from the Agents tab (or set JOBZERO_TOKEN env var)
+  -t, --token    Legacy option; use JOBZERO_TOKEN to keep tokens out of process arguments
   -u, --url      JobZero API URL (default: https://api.jobzero.app/api/mcp)
   -h, --help     Show this help message
 `);
@@ -65,30 +70,57 @@ if (!JOBZERO_TOKEN && process.env.NODE_ENV !== 'test') {
 
 const isDirectRun = Boolean(process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]);
 
-export async function handleLine(line, customFetch = fetch) {
+export function validateGatewayUrl(value) {
+  const url = URL.canParse(value) ? new URL(value) : null;
+  const loopback = url && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (!url || (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
+      url.username || url.password || url.href.includes('?') || url.href.includes('#')) {
+    throw new Error('Use an HTTPS gateway URL without credentials, a query, or a fragment. HTTP is allowed for loopback development.');
+  }
+  return url;
+}
+
+function writeMessage(message) {
+  return process.stdout.write(JSON.stringify(message) + '\n');
+}
+
+function writeError(id, code, message) {
+  return writeMessage({ jsonrpc: '2.0', id, error: { code, message } });
+}
+
+export async function handleLine(line, customFetch = fetch, atCapacity = false) {
   const trimmed = line.trim();
   if (!trimmed) return;
 
   let parsed;
   try {
     parsed = JSON.parse(trimmed);
-  } catch (err) {
-    const parseError = {
-      jsonrpc: '2.0',
-      id: null,
-      error: {
-        code: -32700,
-        message: `Parse error: ${err.message}`
-      }
-    };
-    process.stdout.write(JSON.stringify(parseError) + '\n');
+  } catch {
+    writeError(null, -32700, 'Parse error');
     return;
   }
 
-  // Forward to HTTP MCP endpoint
+  const id = parsed?.id ?? null;
+  const notification = parsed?.jsonrpc === '2.0' && typeof parsed.method === 'string' &&
+    !Object.hasOwn(parsed, 'id');
+  if (atCapacity) {
+    if (!notification) writeError(id, CAPACITY_ERROR, 'Bridge capacity exceeded. Retry after pending calls finish.');
+    return;
+  }
+
+  let url;
   try {
-    const res = await customFetch(JOBZERO_API_URL, {
+    url = validateGatewayUrl(JOBZERO_API_URL);
+  } catch (err) {
+    if (!notification) writeError(id, -32603, err.message);
+    return;
+  }
+
+  try {
+    const res = await customFetch(url.href, {
       method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${JOBZERO_TOKEN}`
@@ -96,61 +128,71 @@ export async function handleLine(line, customFetch = fetch) {
       body: JSON.stringify(parsed)
     });
 
-    if (res.status === 204) {
-      // Notification acknowledgment
+    if (res.status === 204) return;
+    if (notification) {
+      await res.body?.cancel();
       return;
     }
-
-    const data = await res.json();
-    process.stdout.write(JSON.stringify(data) + '\n');
-  } catch (err) {
-    const netError = {
-      jsonrpc: '2.0',
-      id: parsed?.id ?? null,
-      error: {
-        code: -32603,
-        message: `JobZero MCP Gateway Error: ${err.message}`
-      }
-    };
-    process.stdout.write(JSON.stringify(netError) + '\n');
+    writeMessage(await res.json());
+  } catch {
+    if (!notification) writeError(id, -32603, 'JobZero MCP Gateway Error');
   }
 }
 
-if (isDirectRun) {
+async function runBridge() {
+  // Keep one bounded byte buffer. Discard the rest of an oversized line through
+  // its delimiter so the next request can still be read.
+  const line = Buffer.alloc(MAX_LINE_BYTES);
+  let length = 0;
+  let oversized = false;
   let inFlight = 0;
-  let isStdinClosed = false;
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    terminal: false
-  });
+  function finishLine() {
+    if (oversized) {
+      writeError(null, CAPACITY_ERROR, 'Bridge input exceeds the 2 MiB line limit.');
+    } else if (length) {
+      const request = line.toString('utf8', 0, length);
+      if (inFlight >= MAX_IN_FLIGHT) {
+        void handleLine(request, fetch, true);
+      } else {
+        inFlight++;
+        void handleLine(request).finally(() => { inFlight--; });
+      }
+    }
+    length = 0;
+    oversized = false;
+  }
 
-  process.stdin.on('error', (err) => {
-    console.error('[jobzero-mcp] Stdin error:', err.message);
-  });
+  for await (const chunk of process.stdin) {
+    let start = 0;
+    while (start < chunk.length) {
+      const newline = chunk.indexOf(10, start);
+      const end = newline === -1 ? chunk.length : newline;
+      if (!oversized) {
+        if (length + end - start > MAX_LINE_BYTES) {
+          oversized = true;
+        } else {
+          chunk.copy(line, length, start, end);
+          length += end - start;
+        }
+      }
+      if (newline !== -1) {
+        finishLine();
+        if (process.stdout.writableNeedDrain) await once(process.stdout, 'drain');
+      }
+      start = end + 1;
+    }
+  }
+  finishLine();
+}
 
+if (isDirectRun) {
   process.stdout.on('error', (err) => {
     if (err.code === 'EPIPE') process.exit(0);
   });
 
-  rl.on('line', (line) => {
-    inFlight++;
-    handleLine(line)
-      .catch((err) => {
-        console.error('[jobzero-mcp] Uncaught bridge error:', err);
-      })
-      .finally(() => {
-        inFlight--;
-        if (isStdinClosed && inFlight === 0) {
-          process.exit(0);
-        }
-      });
-  });
-
-  rl.on('close', () => {
-    isStdinClosed = true;
-    if (inFlight === 0) {
-      process.exit(0);
-    }
+  await runBridge().catch(() => {
+    console.error('[jobzero-mcp] Could not read stdin.');
+    process.exitCode = 1;
   });
 }
